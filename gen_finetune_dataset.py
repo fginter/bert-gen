@@ -1,4 +1,5 @@
 import sys
+import torch
 
 def blocks2batch(blocks,padding_value):
     #blocks are Batch x Len (examples from one sentence)
@@ -97,8 +98,7 @@ def sentence_example(sent,tokenizer,min_lead_in=3):
     #         [   -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1, 23967]],
     #        device='cuda:0')
 
-    filtr=torch.cat((torch.zeros((to_predict,min_lead_in+1),dtype=torch.long),torch.eye(to_predict,dtype=torch.long)),-1).cuda()
-    inputs=inputs.cuda()
+    filtr=torch.cat((torch.zeros((to_predict,min_lead_in+1),dtype=torch.long),torch.eye(to_predict,dtype=torch.long)),-1)
     gold=filtr*(inputs+1)-1 #the +1 -1 thing just makes sure that masking is -1 and not 0
     #print(filtr.shape, inputs.shape, attention_mask.shape)
     #and now we have all we need for this sentence
@@ -125,8 +125,8 @@ def batch(sent_examples,tokenizer,max_elements=1000):
             #we can yield a padded batch
             #print(batch_examples)
             padded_batch_in=blocks2batch(batch_examples,MASK)
-            padded_batch_masks=blocks2batch(batch_examples,0)
-            padded_batch_golds=blocks2batch(batch_examples,0)
+            padded_batch_masks=blocks2batch(batch_masks,0)
+            padded_batch_golds=blocks2batch(batch_golds,0)
             batch_examples,batch_masks,batch_golds=[],[],[]
             batch_sizes=[]
             batch_length=0
