@@ -2,7 +2,11 @@ import sys
 import torch
 import random
 
-def document_batch(min_trigger=10,max_trigger=30,max_length=60):
+def batches_from_documents(documents,tokenizer,min_trigger=10,max_trigger=30,max_length=60):
+    for document in documents:
+        yield from document_batch(document,tokenizer,min_trigger,max_trigger,max_length)
+
+def document_batch(document,tokenizer,min_trigger=10,max_trigger=30,max_length=60):
     """
     min_trigger: minimum number of tokens which act as a trigger
     max_trigger: maximum number of tokens which act as a trigger
@@ -12,13 +16,20 @@ def document_batch(min_trigger=10,max_trigger=30,max_length=60):
     ids=[tokenizer.convert_tokens_to_ids(tokenized_sentence) for tokenized_sentence in tokenized_sentences]
     ids=[torch.tensor(token_ids) for token_ids in ids] #list of tensors, each being a sequence of token ids in a sentence
     ids=torch.cat(ids)
+    document_len=len(ids)
     current_index=0 #this is where we currently are, and will start generating
     while True:
         trigger_len=random.randint(min_trigger,max_trigger)
+        remains_in_document=document_len-current_index
+        if remains_in_document<=trigger_len: #not enough text left in this document
+            return
+        end_index=min(current_index+max_length,document_len)
+        trigger=ids[current_index:current_index+trigger_len]
+        pred_target=ids[current_index+trigger_len:end_index]
+        yield sentence_example(trigger,pred_target,tokenizer)
+        current_index=current_index+trigger_len #jump to the end of the current trigger, will get new trigger from there
         
         
-    
-
 def blocks2batch(blocks,padding_value):
     #blocks are Batch x Len (examples from one sentence)
     #they need to be stacked vertically
@@ -54,12 +65,9 @@ def blocks2batch(blocks,padding_value):
     #         [1., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
     #         [1., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]])
 
-    
-
 def sentence_example(trigger_ids,sent_ids,tokenizer):
     """
     """
-    print("hi")
     CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
     # len=7
     #   0   1 2 3 4 5 6
@@ -69,6 +77,8 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
     to_predict=sent_ids.shape[0]
     inputs=sent_ids.unsqueeze(0).expand((to_predict,-1)) #copies the sentence "to_predict" times
     triggers=trigger_ids.unsqueeze(0).expand((to_predict,-1)) #copies the trigger "to_predict" times
+    triggers=torch.cat((torch.full((to_predict,1),CLS,dtype=torch.long),triggers),-1)
+        
     #what we need now is the masks for the attention
 
     # min_lead_in=3
@@ -82,7 +92,7 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
     #         [1., 1., 1., 1., 1., 1., 0.]])
 
     lower_triangle=torch.tril(torch.ones((to_predict,to_predict+1)))
-    attention_mask=torch.cat((torch.ones(triggers.shape),lower_triangle),-1)
+    attention_mask=torch.cat((torch.ones((triggers.shape[0],triggers.shape[1]-1)),lower_triangle),-1)
     
     # #and finally, we need the gold output with all tokens masked as -1 except the ones we are supposed to be predicting
     # #this is needed for the loss later on, so we do not train on tokens the model can trivially see
@@ -115,9 +125,9 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
     gold=filtr*(triggers_and_inputs+1)-1 #the +1 -1 thing just makes sure that masking is -1 and not 0
     #print(filtr.shape, inputs.shape, attention_mask.shape)
     #and now we have all we need for this sentence
-    return inputs, attention_mask, gold 
+    return triggers_and_inputs, attention_mask, gold 
 
-def batch(sent_examples,tokenizer,max_elements=100):
+def batch(sent_examples,tokenizer,max_elements=1000):
     CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
     batch_examples,batch_masks,batch_golds=[],[],[]
     batch_sizes=[]
@@ -191,8 +201,20 @@ def sent_examples_from_conllu(inp):
         if not txt:
             continue
         yield txt
-            
 
+def doc_examples_from_plaintext(inp):
+    current_doc=[]
+    for line in inp:
+        line=line.strip()
+        if not line and current_doc:
+            yield current_doc
+            current_doc=[]
+            continue
+        current_doc.append(line)
+    else:
+        if current_doc:
+            yield current_doc
+        
 if __name__=="__main__":
     import torch
     import transformers
@@ -202,12 +224,15 @@ if __name__=="__main__":
     transformers.tokenization_bert.PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES["bert-base-finnish-cased"]=512
     transformers.tokenization_bert.PRETRAINED_INIT_CONFIGURATION["bert-base-finnish-cased"]={'do_lower_case': False}
 
-
-    
     tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-finnish-cased")
-    print("done loading stuff")
+    #print("done loading stuff")
     # sent_examples=sent_examples_from_conllu(sys.stdin)
     # for idx,x in enumerate(batch(sent_examples, tokenizer)):
     #     print(idx,end="\r")
-    ones=torch.ones((7,),dtype=torch.Long)
-    print(sentence_example(ones,ones+1,tokenizer))
+    #ones=torch.ones((7,),dtype=torch.long)
+    #print(sentence_example(ones+3,ones+4,tokenizer))
+    docs=doc_examples_from_plaintext(sys.stdin)
+    for doc in docs:
+        for b in document_batch(doc,tokenizer):
+            for x in b:
+                print(x.shape)
