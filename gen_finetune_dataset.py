@@ -1,5 +1,23 @@
 import sys
 import torch
+import random
+
+def document_batch(min_trigger=10,max_trigger=30,max_length=60):
+    """
+    min_trigger: minimum number of tokens which act as a trigger
+    max_trigger: maximum number of tokens which act as a trigger
+    max_len: maximum length of generated examples (including the trigger)
+    """
+    tokenized_sentences=[tokenizer.tokenize(sentence) for sentence in document]
+    ids=[tokenizer.convert_tokens_to_ids(tokenized_sentence) for tokenized_sentence in tokenized_sentences]
+    ids=[torch.tensor(token_ids) for token_ids in ids] #list of tensors, each being a sequence of token ids in a sentence
+    ids=torch.cat(ids)
+    current_index=0 #this is where we currently are, and will start generating
+    while True:
+        trigger_len=random.randint(min_trigger,max_trigger)
+        
+        
+    
 
 def blocks2batch(blocks,padding_value):
     #blocks are Batch x Len (examples from one sentence)
@@ -38,25 +56,19 @@ def blocks2batch(blocks,padding_value):
 
     
 
-def sentence_example(sent,tokenizer,min_lead_in=3):
+def sentence_example(trigger_ids,sent_ids,tokenizer):
     """
-    Todo - should we mask whole words, not just subwords...?
-
-    min_lead_in: how many words of initial context should we at least keep?
     """
+    print("hi")
     CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
-    tokenized=tokenizer.tokenize(sent)
-    ids=[CLS]+tokenizer.convert_tokens_to_ids(tokenized)
     # len=7
     #   0   1 2 3 4 5 6
     # [cls] a b c d e f
 
     #how many positions can I predict
-    to_predict=len(ids)-min_lead_in-1
-    if to_predict<=0: #too short a sentence to learn from:
-        return
-
-    inputs=torch.tensor(ids).unsqueeze(0).expand((to_predict,-1)) #copies the sentence "to_predict" times
+    to_predict=sent_ids.shape[0]
+    inputs=sent_ids.unsqueeze(0).expand((to_predict,-1)) #copies the sentence "to_predict" times
+    triggers=trigger_ids.unsqueeze(0).expand((to_predict,-1)) #copies the trigger "to_predict" times
     #what we need now is the masks for the attention
 
     # min_lead_in=3
@@ -70,7 +82,7 @@ def sentence_example(sent,tokenizer,min_lead_in=3):
     #         [1., 1., 1., 1., 1., 1., 0.]])
 
     lower_triangle=torch.tril(torch.ones((to_predict,to_predict+1)))
-    attention_mask=torch.cat((torch.ones((to_predict,min_lead_in)),lower_triangle),-1)
+    attention_mask=torch.cat((torch.ones(triggers.shape),lower_triangle),-1)
     
     # #and finally, we need the gold output with all tokens masked as -1 except the ones we are supposed to be predicting
     # #this is needed for the loss later on, so we do not train on tokens the model can trivially see
@@ -98,13 +110,14 @@ def sentence_example(sent,tokenizer,min_lead_in=3):
     #         [   -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1, 23967]],
     #        device='cuda:0')
 
-    filtr=torch.cat((torch.zeros((to_predict,min_lead_in+1),dtype=torch.long),torch.eye(to_predict,dtype=torch.long)),-1)
-    gold=filtr*(inputs+1)-1 #the +1 -1 thing just makes sure that masking is -1 and not 0
+    triggers_and_inputs=torch.cat((triggers,inputs),-1)
+    filtr=torch.cat((torch.zeros(triggers.shape,dtype=torch.long),torch.eye(to_predict,dtype=torch.long)),-1)
+    gold=filtr*(triggers_and_inputs+1)-1 #the +1 -1 thing just makes sure that masking is -1 and not 0
     #print(filtr.shape, inputs.shape, attention_mask.shape)
     #and now we have all we need for this sentence
     return inputs, attention_mask, gold 
 
-def batch(sent_examples,tokenizer,max_elements=1000):
+def batch(sent_examples,tokenizer,max_elements=100):
     CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
     batch_examples,batch_masks,batch_golds=[],[],[]
     batch_sizes=[]
@@ -189,9 +202,12 @@ if __name__=="__main__":
     transformers.tokenization_bert.PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES["bert-base-finnish-cased"]=512
     transformers.tokenization_bert.PRETRAINED_INIT_CONFIGURATION["bert-base-finnish-cased"]={'do_lower_case': False}
 
+
+    
     tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-finnish-cased")
-    sent_examples=sent_examples_from_conllu(sys.stdin)
-    for idx,x in enumerate(batch(sent_examples, tokenizer)):
-        print(idx,end="\r")
-        
-        
+    print("done loading stuff")
+    # sent_examples=sent_examples_from_conllu(sys.stdin)
+    # for idx,x in enumerate(batch(sent_examples, tokenizer)):
+    #     print(idx,end="\r")
+    ones=torch.ones((7,),dtype=torch.Long)
+    print(sentence_example(ones,ones+1,tokenizer))
