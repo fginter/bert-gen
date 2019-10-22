@@ -127,7 +127,7 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
     #and now we have all we need for this sentence
     return triggers_and_inputs, attention_mask, gold 
 
-def batch(sent_examples,tokenizer,max_elements=1000):
+def batch(sent_examples,tokenizer,max_elements=25000):
     CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
     batch_examples,batch_masks,batch_golds=[],[],[]
     batch_sizes=[]

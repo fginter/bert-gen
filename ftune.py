@@ -1,3 +1,4 @@
+import datetime
 import transformers
 import torch
 
@@ -16,7 +17,7 @@ def batches_from_filenames(fnames,tokenizer):
     for f_name in fnames:
         with open(f_name,"rt") as f:
             doc_examples=ds.doc_examples_from_plaintext(f)
-            batches=ds.batches_from_documents(doc_examples,tokenizer)
+            batches=ds.batches_from_documents(doc_examples,tokenizer,max_length=75)
             yield from batches
 
 if __name__=="__main__":
@@ -49,6 +50,7 @@ if __name__=="__main__":
     with open(args.log,"wt") as logfile:
         for idx,x in enumerate(batches):
             inp,mask,outp=x
+            examples_seen+=inp.shape[0]
             inp=inp.cuda()
             mask=mask.cuda()
             outp=outp.cuda()
@@ -58,6 +60,7 @@ if __name__=="__main__":
             loss.backward()
             optimizer.step()
             scheduler.step()
-            print(idx,loss.item(),sep="\t",file=logfile,flush=True)
+            if idx and idx%10==0:
+                print(idx,loss.item(),datetime.datetime.now().isoformat(),examples_seen,sep="\t",file=logfile,flush=True)
             if idx and idx%100==0:
                 model.save_pretrained(args.out)
