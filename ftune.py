@@ -17,7 +17,7 @@ def batches_from_filenames(fnames,tokenizer):
     for f_name in fnames:
         with open(f_name,"rt") as f:
             doc_examples=ds.doc_examples_from_plaintext(f)
-            batches=ds.batches_from_documents(doc_examples,tokenizer,max_length=75)
+            batches=ds.batches_from_documents(doc_examples,tokenizer,max_length=60)
             yield from batches
 
 if __name__=="__main__":
@@ -37,8 +37,8 @@ if __name__=="__main__":
         {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.0},
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.025}
     ]
-    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.001)
-    scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=1000, t_total=1000000)
+    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.00001)
+    scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=100, t_total=1000000)
     model.zero_grad()
     model.train()
 
@@ -62,5 +62,5 @@ if __name__=="__main__":
             scheduler.step()
             if idx and idx%10==0:
                 print(idx,loss.item(),datetime.datetime.now().isoformat(),examples_seen,sep="\t",file=logfile,flush=True)
-            if idx and idx%100==0:
+            if idx and idx%10000==0:
                 model.save_pretrained(args.out)
