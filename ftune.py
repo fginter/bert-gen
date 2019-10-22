@@ -34,10 +34,10 @@ if __name__=="__main__":
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.0},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.025}
     ]
     optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.001)
-    scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=100, t_total=10000)
+    scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=1000, t_total=1000000)
     model.zero_grad()
     model.train()
 
