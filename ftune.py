@@ -13,7 +13,7 @@ transformers.tokenization_bert.PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES["bert-base
 transformers.tokenization_bert.PRETRAINED_INIT_CONFIGURATION["bert-base-finnish-cased"]={'do_lower_case': False}
 print("CUDA:",torch.cuda.is_available())
 
-import gen_finetune_dataset as ds
+import txt_dataset
 import random
 import os
 
@@ -30,6 +30,7 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     if args.apex:
+        assert False, "not sure if this works, better avoid"
         import apex
     
     model=transformers.BertForMaskedLM.from_pretrained("bert-base-finnish-cased")
@@ -42,7 +43,7 @@ if __name__=="__main__":
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.025}
     ]
     t_total=5000000
-    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.00001)
+    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.000001)
     scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=10000, t_total=t_total)
 
     if args.apex:
@@ -53,8 +54,9 @@ if __name__=="__main__":
     model.zero_grad()
     model.train()
 
-    documents=documents_from_filenames(args.files)
-    batches=batches_from_documents(documents,tokenizer)
+    CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
+    exs=txt_dataset.examples(args.files,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=50,shuffle_buff=3000)
+    batches=txt_dataset.batch(exs,padding_element=MASK)
     examples_seen=0
     batches_seen=0
     

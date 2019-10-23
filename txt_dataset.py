@@ -1,3 +1,10 @@
+import sys
+import torch
+import transformers
+import itertools
+import random
+import os
+
 ###############
 # Related to the dataset we work with which is split to a number of
 # text files, whose name codes the source (news, discussions, etc)
@@ -220,7 +227,7 @@ def blocks2batch(blocks,padding_value):
     #         [1., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]])
 
 
-def batch(examples,max_elements=25000):
+def batch(examples,padding_element,max_elements=25000):
     batch_examples,batch_masks,batch_golds=[],[],[]
     batch_sizes=[]
     batch_length=0
@@ -248,3 +255,23 @@ def batch(examples,max_elements=25000):
     else:
         if batch_sizes:
             yield padded_batch_in, padded_batch_masks, padded_batch_golds
+
+if __name__=="__main__":
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument("--files", nargs="+", help=".txt files used to train")
+    args = parser.parse_args()
+
+    transformers.BERT_PRETRAINED_MODEL_ARCHIVE_MAP["bert-base-finnish-cased"]="http://dl.turkunlp.org/finbert/torch-transformers/bert-base-finnish-cased/pytorch_model.bin"
+    transformers.BERT_PRETRAINED_CONFIG_ARCHIVE_MAP["bert-base-finnish-cased"]="http://dl.turkunlp.org/finbert/torch-transformers/bert-base-finnish-cased/config.json"
+    transformers.tokenization_bert.PRETRAINED_VOCAB_FILES_MAP["vocab_file"]["bert-base-finnish-cased"]="http://dl.turkunlp.org/finbert/torch-transformers/bert-base-finnish-cased/vocab.txt"
+    transformers.tokenization_bert.PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES["bert-base-finnish-cased"]=512
+    transformers.tokenization_bert.PRETRAINED_INIT_CONFIGURATION["bert-base-finnish-cased"]={'do_lower_case': False}
+
+    tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-finnish-cased")
+    CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
+
+    exs=examples(args.files,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=50,shuffle_buff=3000)
+    for ex_batch in batch(exs,padding_element=MASK):
+        data_in,attention_mask,gold_out=ex_batch
+        print(data_in.shape,attention_mask.shape,gold_out.shape)
