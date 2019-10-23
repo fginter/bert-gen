@@ -1,7 +1,10 @@
 import time
 import datetime
+import sys
+import itertools
 import transformers
 import torch
+import traceback
 
 transformers.BERT_PRETRAINED_MODEL_ARCHIVE_MAP["bert-base-finnish-cased"]="http://dl.turkunlp.org/finbert/torch-transformers/bert-base-finnish-cased/pytorch_model.bin"
 transformers.BERT_PRETRAINED_CONFIG_ARCHIVE_MAP["bert-base-finnish-cased"]="http://dl.turkunlp.org/finbert/torch-transformers/bert-base-finnish-cased/config.json"
@@ -12,14 +15,56 @@ print("CUDA:",torch.cuda.is_available())
 
 import gen_finetune_dataset as ds
 import random
+import os
 
-def batches_from_filenames(fnames,tokenizer):
-    random.shuffle(fnames)
-    for f_name in fnames:
+def roundrobin(*iterables):
+    "roundrobin('ABC', 'D', 'EF') --> A D E B F C"
+    # Recipe credited to George Sakkis
+    num_active = len(iterables)
+    nexts = itertools.cycle(iter(it).__next__ for it in iterables)
+    while num_active:
+        try:
+            for next in nexts:
+                yield next()
+        except StopIteration:
+            # Remove the iterator we just exhausted from the cycle.
+            num_active -= 1
+            nexts = itertools.cycle(itertools.islice(nexts, num_active))
+
+def balance_filenames(fnames):
+    prefixes={}
+    for fname in fnames:
+        prefixes.setdefault(os.path.basename(fname)[:3],[]).append(fname)
+    min_len=min(len(lst) for lst in prefixes.values())
+    final_lists=[]
+    for prefix,lst in prefixes.items():
+        lst=lst[:min_len]
+        random.shuffle(lst)
+        final_lists.append(lst)
+    filenames=list(roundrobin(*final_lists))
+    return filenames
+
+def documents_from_filenames(fnames):
+    for f_name in balance_filenames(fnames):
         with open(f_name,"rt") as f:
-            doc_examples=ds.doc_examples_from_plaintext(f)
-            batches=ds.batches_from_documents(doc_examples,tokenizer,max_length=75)
-            yield from batches
+                print(datetime.datetime.now().isoformat(),"Open file",f_name,flush=True)
+                doc_examples=ds.doc_examples_from_plaintext(f)
+                yield from doc_examples
+
+
+def shuffle_stream(s,buff=3000):
+    data=(x for x in s) #make this into generator so the islice does the right thing, consuming
+    while True:
+        buffer=list(itertools.islice(data,0,buff))
+        if not buffer:
+            break
+        random.shuffle(buffer)
+        yield from buffer    
+
+def batches_from_documents(docs,tokenizer):
+    docs_shuffled=shuffle_stream(docs,buff=3000)
+    batches=ds.batches_from_documents(docs_shuffled,tokenizer,max_length=80)
+    yield from batches
 
 if __name__=="__main__":
     from argparse import ArgumentParser
@@ -54,7 +99,8 @@ if __name__=="__main__":
     model.zero_grad()
     model.train()
 
-    batches=batches_from_filenames(args.files,tokenizer)
+    documents=documents_from_filenames(args.files)
+    batches=batches_from_documents(documents,tokenizer)
     examples_seen=0
     batches_seen=0
     

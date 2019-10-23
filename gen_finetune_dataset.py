@@ -6,7 +6,7 @@ def batches_from_documents(documents,tokenizer,min_trigger=10,max_trigger=30,max
     for document in documents:
         yield from document_batch(document,tokenizer,min_trigger,max_trigger,max_length)
 
-def document_batch(document,tokenizer,min_trigger=10,max_trigger=30,max_length=60):
+def document_batch(document,tokenizer,min_trigger=40,max_trigger=50,max_length=60):
     """
     min_trigger: minimum number of tokens which act as a trigger
     max_trigger: maximum number of tokens which act as a trigger
@@ -14,7 +14,7 @@ def document_batch(document,tokenizer,min_trigger=10,max_trigger=30,max_length=6
     """
     tokenized_sentences=[tokenizer.tokenize(sentence) for sentence in document]
     ids=[tokenizer.convert_tokens_to_ids(tokenized_sentence) for tokenized_sentence in tokenized_sentences]
-    ids=[torch.tensor(token_ids) for token_ids in ids] #list of tensors, each being a sequence of token ids in a sentence
+    ids=[torch.tensor(token_ids,dtype=torch.long) for token_ids in ids] #list of tensors, each being a sequence of token ids in a sentence
     ids=torch.cat(ids)
     document_len=len(ids)
     current_index=0 #this is where we currently are, and will start generating
@@ -202,12 +202,16 @@ def sent_examples_from_conllu(inp):
             continue
         yield txt
 
-def doc_examples_from_plaintext(inp):
+def doc_examples_from_plaintext(inp,max_doc=50):
+    yielded=0
     current_doc=[]
     for line in inp:
         line=line.strip()
         if not line and current_doc:
             yield current_doc
+            yielded+=1
+            if yielded>=max_doc:
+                break
             current_doc=[]
             continue
         current_doc.append(line)
