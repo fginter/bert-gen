@@ -247,7 +247,7 @@ def batch(examples,padding_element,max_elements=25000):
             #print(batch_examples)
             padded_batch_in=blocks2batch(batch_examples,padding_element)
             padded_batch_masks=blocks2batch(batch_masks,0)
-            padded_batch_golds=blocks2batch(batch_golds,0)
+            padded_batch_golds=blocks2batch(batch_golds,-1)
             batch_examples,batch_masks,batch_golds=[],[],[]
             batch_sizes=[]
             batch_length=0
