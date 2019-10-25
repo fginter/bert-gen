@@ -135,14 +135,14 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
 
     #how many positions can I predict
     to_predict=sent_ids.shape[0]
-    inputs_orig=sent_ids.unsqueeze(0).expand((to_predict,-1)) #copies the sentence "to_predict" times
+    inputs=sent_ids.unsqueeze(0).expand((to_predict,-1)) #copies the sentence "to_predict" times
     extra_col=torch.full((to_predict,1),PAD,dtype=torch.long) #we'll need an extra column for the final SEP
-    inputs=torch.cat((inputs_orig,extra_col),-1)
-    inputs=torch.tril(inputs,-1) #only keep the values below the diagonal, this is what the transformer can see
-    diag=torch.arange(rows) #diagonal indices
+    inputs_xtra_col=torch.cat((inputs,extra_col),-1) #...I'll refer to this later
+    inputs=torch.tril(inputs_xtra_col,-1) #only keep the values below the diagonal, this is what the transformer can see
+    diag=torch.arange(to_predict) #diagonal indices
     inputs[diag,diag]=MASK #main diagonal is masked, this is what the transformer must not see
     inputs[diag,diag+1]=SEP #and the diagonal above that is filled with the SEP token, telling this is where the seqs end
-    all_pad=torch.tensor([[PAD]],dtype=torch.long).expand((rows,rows+1)) #
+    all_pad=torch.tensor([[PAD]],dtype=torch.long).expand((to_predict,to_predict+1)) #
     inputs+=torch.triu(all_pad,2) #upper triangle from second diagonal up is just padding
     # 999 is mask, 666 is SEP and 888 is PAD, [4,5,6,7] was the sequence
     #tensor([[999, 666, 888, 888, 888],
@@ -156,24 +156,28 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
         
     #what we need now is the masks for the attention
 
-    inp_mask=torch.tril(torch.ones(inp.shape),1)
+    inp_mask=torch.tril(torch.ones(inputs.shape,dtype=torch.long),1)
     #tensor([[1., 1., 0., 0., 0.],
     #    [1., 1., 1., 0., 0.],
     #    [1., 1., 1., 1., 0.],
     #    [1., 1., 1., 1., 1.]])
 
     #prepend ones for the trigger part of the sentence
-    att_mask=torch.cat((torch.ones(triggers.shape),inp_mask),-1) #and of course thr trigger we can see
-    
+    attention_mask=torch.cat((torch.ones(triggers.shape,dtype=torch.long),inp_mask),-1) #and of course thr trigger we can see
     
     
     # #and finally, we need the gold output with all tokens masked as -1 except the ones we are supposed to be predicting
     # #this is needed for the loss later on, so we do not train on tokens the model can trivially see
+    diagonal=(inputs_xtra_col+1).triu().tril()-1  #the +1 -1 thing just makes sure that masking is -1 not zero
+    #tensor([[ 4, -1, -1, -1, -1],
+    #        [-1,  5, -1, -1, -1],
+    #        [-1, -1,  6, -1, -1],
+    #        [-1, -1, -1,  7, -1]])
     
+    gold=torch.cat((torch.full(triggers.shape,-1,dtype=torch.long),diagonal),-1) #...and all the inputs are masked at -1
+
+
     triggers_and_inputs=torch.cat((triggers,inputs),-1)
-    filtr=torch.cat((torch.zeros(triggers.shape,dtype=torch.long),torch.eye(to_predict,dtype=torch.long)),-1)
-    gold=filtr*(triggers_and_inputs+1)-1 #the +1 -1 thing just makes sure that masking is -1 and not 0
-    #print(filtr.shape, inputs.shape, attention_mask.shape)
     #and now we have all we need for this sentence
     return triggers_and_inputs, attention_mask, gold 
 
