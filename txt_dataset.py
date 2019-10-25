@@ -128,58 +128,48 @@ def examples(fnames,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_do
 def sentence_example(trigger_ids,sent_ids,tokenizer):
     """
     """
-    CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
+    CLS,SEP,MASK,PAD=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]","[PAD]"])
     # len=7
     #   0   1 2 3 4 5 6
     # [cls] a b c d e f
 
     #how many positions can I predict
     to_predict=sent_ids.shape[0]
-    inputs=sent_ids.unsqueeze(0).expand((to_predict,-1)) #copies the sentence "to_predict" times
-    triggers=trigger_ids.unsqueeze(0).expand((to_predict,-1)) #copies the trigger "to_predict" times
+    inputs_orig=sent_ids.unsqueeze(0).expand((to_predict,-1)) #copies the sentence "to_predict" times
+    extra_col=torch.full((to_predict,1),PAD,dtype=torch.long) #we'll need an extra column for the final SEP
+    inputs=torch.cat((inputs_orig,extra_col),-1)
+    inputs=torch.tril(inputs,-1) #only keep the values below the diagonal, this is what the transformer can see
+    diag=torch.arange(rows) #diagonal indices
+    inputs[diag,diag]=MASK #main diagonal is masked, this is what the transformer must not see
+    inputs[diag,diag+1]=SEP #and the diagonal above that is filled with the SEP token, telling this is where the seqs end
+    all_pad=torch.tensor([[PAD]],dtype=torch.long).expand((rows,rows+1)) #
+    inputs+=torch.triu(all_pad,2) #upper triangle from second diagonal up is just padding
+    # 999 is mask, 666 is SEP and 888 is PAD, [4,5,6,7] was the sequence
+    #tensor([[999, 666, 888, 888, 888],
+    #        [  4, 999, 666, 888, 888],
+    #        [  4,   5, 999, 666, 888],
+    #        [  4,   5,   6, 999, 666]])
+
+
+    triggers=trigger_ids.unsqueeze(0).expand((to_predict,-1)).clone() #copies the trigger "to_predict" times
     triggers=torch.cat((torch.full((to_predict,1),CLS,dtype=torch.long),triggers),-1)
         
     #what we need now is the masks for the attention
 
-    # min_lead_in=3
-    # s_len=7
-    # to_predict=s_len-min_lead_in-1
-    # lower_triangle=torch.tril(torch.ones((to_predict,to_predict+1)))
-    # mask=torch.cat((torch.ones((to_predict,min_lead_in)),lower_triangle),-1)
-    # print(mask)
-    # tensor([[1., 1., 1., 1., 0., 0., 0.],
-    #         [1., 1., 1., 1., 1., 0., 0.],
-    #         [1., 1., 1., 1., 1., 1., 0.]])
+    inp_mask=torch.tril(torch.ones(inp.shape),1)
+    #tensor([[1., 1., 0., 0., 0.],
+    #    [1., 1., 1., 0., 0.],
+    #    [1., 1., 1., 1., 0.],
+    #    [1., 1., 1., 1., 1.]])
 
-    lower_triangle=torch.tril(torch.ones((to_predict,to_predict+1)))
-    attention_mask=torch.cat((torch.ones((triggers.shape[0],triggers.shape[1]-1)),lower_triangle),-1)
+    #prepend ones for the trigger part of the sentence
+    att_mask=torch.cat((torch.ones(triggers.shape),inp_mask),-1) #and of course thr trigger we can see
+    
+    
     
     # #and finally, we need the gold output with all tokens masked as -1 except the ones we are supposed to be predicting
     # #this is needed for the loss later on, so we do not train on tokens the model can trivially see
-    #
-    # print("texts",new_texts)
-    # filter=torch.cat((torch.zeros((5,4),dtype=torch.long),torch.eye(5,dtype=torch.long)),-1).cuda()
-    # print("filter",filter)
-    # gold=filter*(new_texts+1)-1
-    # print("gold",gold)
-    # texts tensor([[  102,  3668,   145,  3093,   374,   145, 22936,   142, 23967],
-    #         [  102,  3668,   145,  3093,   374,   145, 22936,   142, 23967],
-    #         [  102,  3668,   145,  3093,   374,   145, 22936,   142, 23967],
-    #         [  102,  3668,   145,  3093,   374,   145, 22936,   142, 23967],
-    #         [  102,  3668,   145,  3093,   374,   145, 22936,   142, 23967]],
-    #        device='cuda:0')
-    # filter tensor([[0, 0, 0, 0, 1, 0, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 1, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 0, 1, 0, 0],
-    #         [0, 0, 0, 0, 0, 0, 0, 1, 0],
-    #         [0, 0, 0, 0, 0, 0, 0, 0, 1]], device='cuda:0')
-    # gold tensor([[   -1,    -1,    -1,    -1,   374,    -1,    -1,    -1,    -1],
-    #         [   -1,    -1,    -1,    -1,    -1,   145,    -1,    -1,    -1],
-    #         [   -1,    -1,    -1,    -1,    -1,    -1, 22936,    -1,    -1],
-    #         [   -1,    -1,    -1,    -1,    -1,    -1,    -1,   142,    -1],
-    #         [   -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1, 23967]],
-    #        device='cuda:0')
-
+    
     triggers_and_inputs=torch.cat((triggers,inputs),-1)
     filtr=torch.cat((torch.zeros(triggers.shape,dtype=torch.long),torch.eye(to_predict,dtype=torch.long)),-1)
     gold=filtr*(triggers_and_inputs+1)-1 #the +1 -1 thing just makes sure that masking is -1 and not 0
@@ -268,7 +258,19 @@ if __name__=="__main__":
     tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-finnish-cased")
     CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
 
-    exs=examples(args.files,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=50,shuffle_buff=3000)
-    for ex_batch in batch(exs,padding_element=MASK):
-        data_in,attention_mask,gold_out=ex_batch
-        print(data_in.shape,attention_mask.shape,gold_out.shape)
+    trigger_ids=tokenizer.convert_tokens_to_ids(tokenizer.tokenize("olen väärässä"))
+    sent_ids=tokenizer.convert_tokens_to_ids(tokenizer.tokenize("joten haistan paska"))
+
+    trigger_ids=torch.tensor(trigger_ids, dtype=torch.long)
+    sent_ids=torch.tensor(trigger_ids, dtype=torch.long)
+    
+    sent,mask,gold=sentence_example(trigger_ids,sent_ids,tokenizer)
+    print(sent)
+    print(mask)
+    print(gold)
+    
+    
+    # exs=examples(args.files,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=50,shuffle_buff=3000)
+    # for ex_batch in batch(exs,padding_element=MASK):
+    #     data_in,attention_mask,gold_out=ex_batch
+    #     print(data_in.shape,attention_mask.shape,gold_out.shape)

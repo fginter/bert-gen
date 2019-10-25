@@ -54,9 +54,9 @@ if __name__=="__main__":
     model.zero_grad()
     model.train()
 
-    CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
+    CLS,SEP,MASK,PAD=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]","[PAD]"])
     exs=txt_dataset.examples(args.files,tokenizer,min_trigger=10,max_trigger=40,max_length=60,max_doc_per_file=50,shuffle_buff=3000)
-    batches=txt_dataset.batch(exs,padding_element=MASK,max_elements=10000)
+    batches=txt_dataset.batch(exs,padding_element=PAD,max_elements=10000)
     examples_seen=0
     batches_seen=0
     
