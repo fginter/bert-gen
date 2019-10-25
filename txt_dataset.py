@@ -113,7 +113,7 @@ def document_examples(documents,tokenizer,min_trigger=40,max_trigger=50,max_leng
             current_index=current_index+max_length #jump to the end of the current example, so we have no overlap
         
         
-def examples(fnames,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=50,shuffle_buff=3000):
+def examples(fnames,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=3000,shuffle_buff=30000):
     balanced_fnames=balance_filenames(fnames)
     print("BALANCED NAMES:",len(balanced_fnames))
     docs_balanced=docs_from_plaintext_files(balanced_fnames,max_doc=max_doc_per_file)

@@ -40,10 +40,10 @@ if __name__=="__main__":
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.0},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.025}
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0025}
     ]
     t_total=5000000
-    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.000001)
+    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.00000005)
     scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=5000, t_total=t_total)
 
     if args.apex:
@@ -69,7 +69,7 @@ if __name__=="__main__":
             inp=inp.cuda()
             mask=mask.cuda()
             outp=outp.cuda()
-            optimizer.zero_grad()
+            model.zero_grad()
             outputs=model(inp,attention_mask=mask,masked_lm_labels=outp)
             loss=outputs[0]
             if args.apex:
