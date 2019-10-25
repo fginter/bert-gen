@@ -105,7 +105,7 @@ def document_examples(documents,tokenizer,min_trigger=40,max_trigger=50,max_leng
             trigger_len=random.randint(min_trigger,max_trigger)
             remains_in_document=document_len-current_index
             if remains_in_document<=trigger_len: #not enough text left in this document
-                return
+                break
             end_index=min(current_index+max_length,document_len)
             trigger=ids[current_index:current_index+trigger_len]
             pred_target=ids[current_index+trigger_len:end_index]
@@ -115,11 +115,11 @@ def document_examples(documents,tokenizer,min_trigger=40,max_trigger=50,max_leng
         
 def examples(fnames,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=50,shuffle_buff=3000):
     balanced_fnames=balance_filenames(fnames)
+    print("BALANCED NAMES:",len(balanced_fnames))
     docs_balanced=docs_from_plaintext_files(balanced_fnames,max_doc=max_doc_per_file)
     docs_balanced_shuffled=shuffle_stream(docs_balanced,buff=shuffle_buff)
-    examples=document_examples(docs_balanced_shuffled,tokenizer,min_trigger=min_trigger,max_trigger=max_trigger,max_length=max_length)
-    
-    yield from examples
+    for e in document_examples(docs_balanced_shuffled,tokenizer,min_trigger=min_trigger,max_trigger=max_trigger,max_length=max_length):
+        yield e
 
 
 ####################
@@ -245,15 +245,12 @@ def batch(examples,padding_element,max_elements=25000):
         if total_elements>=max_elements:
             #we can yield a padded batch
             #print(batch_examples)
-            padded_batch_in=blocks2batch(batch_examples,MASK)
+            padded_batch_in=blocks2batch(batch_examples,padding_element)
             padded_batch_masks=blocks2batch(batch_masks,0)
             padded_batch_golds=blocks2batch(batch_golds,-1)
             batch_examples,batch_masks,batch_golds=[],[],[]
             batch_sizes=[]
             batch_length=0
-            yield padded_batch_in, padded_batch_masks, padded_batch_golds
-    else:
-        if batch_sizes:
             yield padded_batch_in, padded_batch_masks, padded_batch_golds
 
 if __name__=="__main__":

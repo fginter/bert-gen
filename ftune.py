@@ -44,7 +44,7 @@ if __name__=="__main__":
     ]
     t_total=5000000
     optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.000001)
-    scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=10000, t_total=t_total)
+    scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=5000, t_total=t_total)
 
     if args.apex:
         opt_level = 'O1'
@@ -55,13 +55,14 @@ if __name__=="__main__":
     model.train()
 
     CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
-    exs=txt_dataset.examples(args.files,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=50,shuffle_buff=3000)
-    batches=txt_dataset.batch(exs,padding_element=MASK)
+    exs=txt_dataset.examples(args.files,tokenizer,min_trigger=10,max_trigger=40,max_length=60,max_doc_per_file=50,shuffle_buff=3000)
+    batches=txt_dataset.batch(exs,padding_element=MASK,max_elements=10000)
     examples_seen=0
     batches_seen=0
     
     time_started=time.time()
     with open(args.log,"wt") as logfile:
+        print("batchid","loss","time","examples","batchpersec","batchpersec","examplpersec","examplpersec",sep="\t",file=logfile)
         for idx,x in enumerate(batches):
             inp,mask,outp=x
             examples_seen+=inp.shape[0]
