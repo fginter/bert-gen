@@ -155,10 +155,23 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
     triggers=torch.cat((torch.full((to_predict,1),CLS,dtype=torch.long),triggers),-1)
         
     #what we need now is the masks for the attention
-
     inp_mask=torch.tril(torch.ones(inputs.shape,dtype=torch.long),1)
-    #let's try right-aligned position embeddings
 
+    #let's try right-aligned position embeddings
+    max_len=128
+    triggers.shape[1]
+    x=torch.arange(max_len-triggers.shape[-1]-to_predict,max_len+1).unsqueeze(0).expand((to_predict,-1))
+    off=torch.arange(to_predict-1,-1,-1).unsqueeze(-1)
+    position_indices=torch.tril(x+off,triggers.shape[1]+1)
+    #Tensor([[122, 123, 124, 125, 126, 127, 128,   0,   0,   0,   0,   0,   0],
+    #       [121, 122, 123, 124, 125, 126, 127, 128,   0,   0,   0,   0,   0],
+    #       [120, 121, 122, 123, 124, 125, 126, 127, 128,   0,   0,   0,   0],
+    #       [119, 120, 121, 122, 123, 124, 125, 126, 127, 128,   0,   0,   0],
+    #       [118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128,   0,   0],
+    #       [117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128,   0],
+    #       [116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128]])
+
+    
     #tensor([[1., 1., 0., 0., 0.],
     #    [1., 1., 1., 0., 0.],
     #    [1., 1., 1., 1., 0.],
@@ -181,7 +194,7 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
 
     triggers_and_inputs=torch.cat((triggers,inputs),-1)
     #and now we have all we need for this sentence
-    return triggers_and_inputs, attention_mask, gold 
+    return triggers_and_inputs, attention_mask, position_indices, gold
 
 
 #####################
@@ -224,15 +237,16 @@ def blocks2batch(blocks,padding_value):
 
 
 def batch(examples,padding_element,max_elements=25000):
-    batch_examples,batch_masks,batch_golds=[],[],[]
+    batch_examples,batch_masks,batch_position_indices,batch_golds=[],[],[],[]
     batch_sizes=[]
     batch_length=0
     for s_ex in examples:
         if not s_ex: #in case this is None or something such, should not happen!
             continue
-        data_in,attention_mask,gold_out=s_ex
+        data_in,attention_mask,pos_indices,gold_out=s_ex
         batch_examples.append(data_in)
         batch_masks.append(attention_mask)
+        batch_position_indices.append(pos_indices)
         batch_golds.append(gold_out)
         batch_sizes.append(gold_out.shape[1])
         batch_length+=gold_out.shape[0]
@@ -243,11 +257,12 @@ def batch(examples,padding_element,max_elements=25000):
             #print(batch_examples)
             padded_batch_in=blocks2batch(batch_examples,padding_element)
             padded_batch_masks=blocks2batch(batch_masks,0)
+            padded_batch_position_indices=blocks2batch(batch_position_indices,0)
             padded_batch_golds=blocks2batch(batch_golds,-1)
-            batch_examples,batch_masks,batch_golds=[],[],[]
+            batch_examples,batch_masks,batch_position_indices,batch_golds=[],[],[],[]
             batch_sizes=[]
             batch_length=0
-            yield padded_batch_in, padded_batch_masks, padded_batch_golds
+            yield padded_batch_in, padded_batch_masks, padded_batch_position_indices, padded_batch_golds
 
 if __name__=="__main__":
     from argparse import ArgumentParser
@@ -270,9 +285,10 @@ if __name__=="__main__":
     trigger_ids=torch.tensor(trigger_ids, dtype=torch.long)
     sent_ids=torch.tensor(sent_ids, dtype=torch.long)
     
-    sent,mask,gold=sentence_example(trigger_ids,sent_ids,tokenizer)
+    sent,mask,pos_indices,gold=sentence_example(trigger_ids,sent_ids,tokenizer)
     print(sent)
     print(mask)
+    print(pos_indices)
     print(gold)
     
     

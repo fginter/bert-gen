@@ -66,13 +66,14 @@ if __name__=="__main__":
             batches=txt_dataset.batch(exs,padding_element=PAD,max_elements=10000)
             print("batchid","loss","time","examples","batchpersec","batchpersec","examplpersec","examplpersec",sep="\t",file=logfile)
             for idx,x in enumerate(batches):
-                inp,mask,outp=x
+                inp,mask,pos_i,outp=x
                 examples_seen+=inp.shape[0]
                 inp=inp.cuda()
                 mask=mask.cuda()
+                pos_i=pos_i.cuda()
                 outp=outp.cuda()
                 model.zero_grad()
-                outputs=model(inp,attention_mask=mask,masked_lm_labels=outp)
+                outputs=model(inp,position_ids=pos_i,attention_mask=mask,masked_lm_labels=outp)
                 loss=outputs[0]
                 if args.apex:
                     with apex.amp.scale_loss(loss, optimizer) as scaled_loss:
