@@ -40,10 +40,10 @@ if __name__=="__main__":
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.0},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0025}
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.025}
     ]
-    t_total=5000000
-    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.00000005)
+    t_total=200000
+    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.001)
     scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=5000, t_total=t_total)
 
     if args.apex:
@@ -55,34 +55,38 @@ if __name__=="__main__":
     model.train()
 
     CLS,SEP,MASK,PAD=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]","[PAD]"])
-    exs=txt_dataset.examples(args.files,tokenizer,min_trigger=10,max_trigger=40,max_length=60,max_doc_per_file=50,shuffle_buff=3000)
-    batches=txt_dataset.batch(exs,padding_element=PAD,max_elements=10000)
     examples_seen=0
     batches_seen=0
     
     time_started=time.time()
     with open(args.log,"wt") as logfile:
-        print("batchid","loss","time","examples","batchpersec","batchpersec","examplpersec","examplpersec",sep="\t",file=logfile)
-        for idx,x in enumerate(batches):
-            inp,mask,outp=x
-            examples_seen+=inp.shape[0]
-            inp=inp.cuda()
-            mask=mask.cuda()
-            outp=outp.cuda()
-            model.zero_grad()
-            outputs=model(inp,attention_mask=mask,masked_lm_labels=outp)
-            loss=outputs[0]
-            if args.apex:
-                with apex.amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
-            optimizer.step()
-            scheduler.step()
-            if idx and idx%10==0:
-                elapsed=time.time()-time_started
-                print(idx,loss.item(),datetime.datetime.now().isoformat(),examples_seen,idx/elapsed,"[batch/sec]",examples_seen/elapsed,"[ex/sec]",sep="\t",file=logfile,flush=True)
-            if idx and idx%10000==0:
-                model.save_pretrained(args.out)
-            if idx>=t_total:
-                break
+        while batches_seen<t_total:
+            print(datetime.datetime.now().isoformat(),"NEW EPOCH. Batches seen",batches_seen)
+            exs=txt_dataset.examples(args.files,tokenizer,min_trigger=10,max_trigger=40,max_length=60,max_doc_per_file=15000,shuffle_buff=50000)
+            batches=txt_dataset.batch(exs,padding_element=PAD,max_elements=10000)
+            print("batchid","loss","time","examples","batchpersec","batchpersec","examplpersec","examplpersec",sep="\t",file=logfile)
+            for idx,x in enumerate(batches):
+                inp,mask,outp=x
+                examples_seen+=inp.shape[0]
+                inp=inp.cuda()
+                mask=mask.cuda()
+                outp=outp.cuda()
+                model.zero_grad()
+                outputs=model(inp,attention_mask=mask,masked_lm_labels=outp)
+                loss=outputs[0]
+                if args.apex:
+                    with apex.amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    loss.backward()
+                optimizer.step()
+                scheduler.step()
+                if batches_seen and batches_seen%10==0:
+                    elapsed=time.time()-time_started
+                    print(batches_seen,loss.item(),datetime.datetime.now().isoformat(),examples_seen,batches_seen/elapsed,"[batch/sec]",examples_seen/elapsed,"[ex/sec]",sep="\t",file=logfile,flush=True)
+                if batches_seen and batches_seen%10000==0:
+                    model.save_pretrained(args.out)
+
+                batches_seen+=1
+                if batches_seen>=t_total:
+                    break

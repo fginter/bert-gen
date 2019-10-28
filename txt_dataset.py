@@ -157,6 +157,8 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
     #what we need now is the masks for the attention
 
     inp_mask=torch.tril(torch.ones(inputs.shape,dtype=torch.long),1)
+    #let's try right-aligned position embeddings
+
     #tensor([[1., 1., 0., 0., 0.],
     #    [1., 1., 1., 0., 0.],
     #    [1., 1., 1., 1., 0.],
@@ -266,7 +268,7 @@ if __name__=="__main__":
     sent_ids=tokenizer.convert_tokens_to_ids(tokenizer.tokenize("joten haistan paska"))
 
     trigger_ids=torch.tensor(trigger_ids, dtype=torch.long)
-    sent_ids=torch.tensor(trigger_ids, dtype=torch.long)
+    sent_ids=torch.tensor(sent_ids, dtype=torch.long)
     
     sent,mask,gold=sentence_example(trigger_ids,sent_ids,tokenizer)
     print(sent)
