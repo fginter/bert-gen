@@ -280,7 +280,7 @@ if __name__=="__main__":
     CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
 
     trigger_ids=tokenizer.convert_tokens_to_ids(tokenizer.tokenize("olen väärässä"))
-    sent_ids=tokenizer.convert_tokens_to_ids(tokenizer.tokenize("joten haistan paska"))
+    sent_ids=tokenizer.convert_tokens_to_ids(tokenizer.tokenize("joten lähden kotiin"))
 
     trigger_ids=torch.tensor(trigger_ids, dtype=torch.long)
     sent_ids=torch.tensor(sent_ids, dtype=torch.long)

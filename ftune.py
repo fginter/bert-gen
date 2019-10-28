@@ -27,6 +27,7 @@ if __name__=="__main__":
     parser.add_argument("--files", nargs="+", help=".txt files used to train")
     parser.add_argument("--out", help="out model filename")
     parser.add_argument("--log", help="logfile")
+    parser.add_argument("--l2",default=0.0025, type=float, help="Optimizer L2")
     args = parser.parse_args()
 
     if args.apex:
@@ -40,10 +41,10 @@ if __name__=="__main__":
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.0},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.025}
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': args.l2}
     ]
     t_total=200000
-    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.001)
+    optimizer=transformers.optimization.AdamW(optimizer_grouped_parameters,lr=0.00001)
     scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=5000, t_total=t_total)
 
     if args.apex:
@@ -63,7 +64,7 @@ if __name__=="__main__":
         while batches_seen<t_total:
             print(datetime.datetime.now().isoformat(),"NEW EPOCH. Batches seen",batches_seen)
             exs=txt_dataset.examples(args.files,tokenizer,min_trigger=10,max_trigger=40,max_length=60,max_doc_per_file=15000,shuffle_buff=50000)
-            batches=txt_dataset.batch(exs,padding_element=PAD,max_elements=10000)
+            batches=txt_dataset.batch(exs,padding_element=PAD,max_elements=8000)
             print("batchid","loss","time","examples","batchpersec","batchpersec","examplpersec","examplpersec",sep="\t",file=logfile)
             for idx,x in enumerate(batches):
                 inp,mask,pos_i,outp=x
