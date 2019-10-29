@@ -127,8 +127,9 @@ def examples(fnames,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_do
 
 def sentence_example(trigger_ids,sent_ids,tokenizer):
     """
+    OOO
     """
-    CLS,SEP,MASK,PAD=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]","[PAD]"])
+    CLS,SEP,MASK,PAD,UNUSED0=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]","[PAD]","[unused0]"])
     # len=7
     #   0   1 2 3 4 5 6
     # [cls] a b c d e f
@@ -141,7 +142,7 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
     inputs=torch.tril(inputs_xtra_col,-1) #only keep the values below the diagonal, this is what the transformer can see
     diag=torch.arange(to_predict) #diagonal indices
     inputs[diag,diag]=MASK #main diagonal is masked, this is what the transformer must not see
-    inputs[diag,diag+1]=SEP #and the diagonal above that is filled with the SEP token, telling this is where the seqs end
+    inputs[diag,diag+1]=MASK #and the diagonal above that is filled with another MASK token, telling this is where the seqs end
     all_pad=torch.tensor([[PAD]],dtype=torch.long).expand((to_predict,to_predict+1)) #
     inputs+=torch.triu(all_pad,2) #upper triangle from second diagonal up is just padding
     # 999 is mask, 666 is SEP and 888 is PAD, [4,5,6,7] was the sequence
@@ -152,7 +153,7 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
 
 
     triggers=trigger_ids.unsqueeze(0).expand((to_predict,-1)).clone() #copies the trigger "to_predict" times
-    triggers=torch.cat((torch.full((to_predict,1),CLS,dtype=torch.long),triggers),-1)
+    triggers=torch.cat((torch.full((to_predict,1),CLS,dtype=torch.long),torch.full((to_predict,1),SEP,dtype=torch.long),triggers),-1)
         
     #what we need now is the masks for the attention
     inp_mask=torch.tril(torch.ones(inputs.shape,dtype=torch.long),1)
