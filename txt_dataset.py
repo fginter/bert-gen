@@ -163,9 +163,9 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
     #let's try right-aligned position embeddings
     max_len=128
     triggers.shape[1]
-    x=torch.arange(max_len-triggers.shape[-1]-to_predict,max_len+1).unsqueeze(0).expand((to_predict,-1))
+    x=torch.arange(max_len-triggers.shape[-1]-to_predict+1,max_len+1).unsqueeze(0).expand((to_predict,-1))
     off=torch.arange(to_predict-1,-1,-1).unsqueeze(-1)
-    position_indices=torch.tril(x+off,triggers.shape[1]+1)
+    position_indices=torch.tril(x+off,triggers.shape[1])
     #Tensor([[122, 123, 124, 125, 126, 127, 128,   0,   0,   0,   0,   0,   0],
     #       [121, 122, 123, 124, 125, 126, 127, 128,   0,   0,   0,   0,   0],
     #       [120, 121, 122, 123, 124, 125, 126, 127, 128,   0,   0,   0,   0],
@@ -292,10 +292,10 @@ if __name__=="__main__":
     print("Sent ids:",sent_ids)
     
     sent,mask,pos_indices,gold=sentence_example(trigger_ids,sent_ids,tokenizer)
-    print("input",sent)
-    print("attmask",mask)
-    print("posidx",pos_indices)
-    print("gold",gold)
+    print("input",sent,sent.shape)
+    print("attmask",mask,mask.shape)
+    print("posidx",pos_indices,pos_indices.shape)
+    print("gold",gold,gold.shape)
     
     
     # exs=examples(args.files,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=50,shuffle_buff=3000)
