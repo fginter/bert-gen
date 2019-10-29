@@ -136,27 +136,29 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
 
     #how many positions can I predict
     to_predict=sent_ids.shape[0]
-    inputs=sent_ids.unsqueeze(0).expand((to_predict,-1)) #copies the sentence "to_predict" times
-    extra_col=torch.full((to_predict,1),PAD,dtype=torch.long) #we'll need an extra column for the final SEP
-    inputs_xtra_col=torch.cat((inputs,extra_col),-1) #...I'll refer to this later
-    inputs=torch.tril(inputs_xtra_col,-1) #only keep the values below the diagonal, this is what the transformer can see
+    inputs_gold=sent_ids.unsqueeze(0).expand((to_predict,-1))
+    inputs=inputs_gold.clone() #copies the sentence "to_predict" times
+    #extra_col=torch.full((to_predict,1),PAD,dtype=torch.long) #we'll need an extra c
+    #inputs_xtra_col=torch.cat((inputs,extra_col),-1) #...I'll refer to this later
+    inputs=torch.tril(inputs) #only keep the values below the diagonal, this is what the transformer can see
     diag=torch.arange(to_predict) #diagonal indices
     inputs[diag,diag]=MASK #main diagonal is masked, this is what the transformer must not see
-    inputs[diag,diag+1]=MASK #and the diagonal above that is filled with another MASK token, telling this is where the seqs end
-    all_pad=torch.tensor([[PAD]],dtype=torch.long).expand((to_predict,to_predict+1)) #
-    inputs+=torch.triu(all_pad,2) #upper triangle from second diagonal up is just padding
+    #inputs[diag,diag+1]=MASK #and the diagonal above that is filled with another MASK token, telling this is where the seqs end
+    all_pad=torch.tensor([[PAD]],dtype=torch.long).expand((to_predict,to_predict)) #
+    inputs+=torch.triu(all_pad,1) #upper triangle from second diagonal up is just padding
     # 999 is mask, 666 is SEP and 888 is PAD, [4,5,6,7] was the sequence
-    #tensor([[999, 666, 888, 888, 888],
-    #        [  4, 999, 666, 888, 888],
-    #        [  4,   5, 999, 666, 888],
-    #        [  4,   5,   6, 999, 666]])
-
+    #tensor([[999, 888, 888, 888],
+    #        [  4, 999, 888, 888],
+    #        [  4,   5, 999, 888],
+    #        [  4,   5,   6, 999]])
 
     triggers=trigger_ids.unsqueeze(0).expand((to_predict,-1)).clone() #copies the trigger "to_predict" times
-    triggers=torch.cat((torch.full((to_predict,1),CLS,dtype=torch.long),torch.full((to_predict,1),SEP,dtype=torch.long),triggers),-1)
+    #everything starts with CLS and SEP
+    #triggers=torch.cat((torch.full((to_predict,1),CLS,dtype=torch.long),torch.full((to_predict,1),SEP,dtype=torch.long),triggers),-1)
+    triggers=torch.cat((torch.full((to_predict,1),CLS,dtype=torch.long),triggers),-1) #try without sep
         
     #what we need now is the masks for the attention
-    inp_mask=torch.tril(torch.ones(inputs.shape,dtype=torch.long),1)
+    inp_mask=torch.tril(torch.ones(inputs.shape,dtype=torch.long))
 
     #let's try right-aligned position embeddings
     max_len=128
@@ -184,7 +186,7 @@ def sentence_example(trigger_ids,sent_ids,tokenizer):
     
     # #and finally, we need the gold output with all tokens masked as -1 except the ones we are supposed to be predicting
     # #this is needed for the loss later on, so we do not train on tokens the model can trivially see
-    diagonal=(inputs_xtra_col+1).triu().tril()-1  #the +1 -1 thing just makes sure that masking is -1 not zero
+    diagonal=(inputs_gold+1).triu().tril()-1  #the +1 -1 thing just makes sure that masking is -1 not zero
     #tensor([[ 4, -1, -1, -1, -1],
     #        [-1,  5, -1, -1, -1],
     #        [-1, -1,  6, -1, -1],
