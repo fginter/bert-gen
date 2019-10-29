@@ -279,17 +279,20 @@ if __name__=="__main__":
     tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-finnish-cased")
     CLS,SEP,MASK=tokenizer.convert_tokens_to_ids(["[CLS]","[SEP]","[MASK]"])
 
-    trigger_ids=tokenizer.convert_tokens_to_ids(tokenizer.tokenize("olen väärässä"))
+    trigger_ids=tokenizer.convert_tokens_to_ids(tokenizer.tokenize("olen väärässä kuten aina"))
     sent_ids=tokenizer.convert_tokens_to_ids(tokenizer.tokenize("joten lähden kotiin"))
 
     trigger_ids=torch.tensor(trigger_ids, dtype=torch.long)
     sent_ids=torch.tensor(sent_ids, dtype=torch.long)
+
+    print("Trigger ids:", trigger_ids)
+    print("Sent ids:",sent_ids)
     
     sent,mask,pos_indices,gold=sentence_example(trigger_ids,sent_ids,tokenizer)
-    print(sent)
-    print(mask)
-    print(pos_indices)
-    print(gold)
+    print("input",sent)
+    print("attmask",mask)
+    print("posidx",pos_indices)
+    print("gold",gold)
     
     
     # exs=examples(args.files,tokenizer,min_trigger=10,max_trigger=60,max_length=80,max_doc_per_file=50,shuffle_buff=3000)
